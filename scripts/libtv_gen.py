@@ -168,7 +168,8 @@ def cmd_query(args) -> int:
             if urls:
                 return _ok("query", data={"done": True, "result_urls": urls, "projectUrl": data.get("projectUrl"), "raw": resp})
             time.sleep(POLL_INTERVAL)
-        return _ok("query", data={"done": False, "note": "3 分钟无结果，请前往画布查看", "projectUrl": _project_url(args.session_id)})
+        return _ok("query", data={"done": False, "note": "3 分钟无结果，请前往画布查看", "projectUrl": _project_url(args.session_id),
+                            "projectUrlNote": "此为 API 自查地址，非用户画布；画布地址以会话返回字段为准"})
     except Exception as e:  # noqa
         return _ok("query", error=str(e))
 

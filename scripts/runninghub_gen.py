@@ -133,7 +133,9 @@ def _build_payload(args) -> dict:
     if args.ratio:
         payload["aspectRatio"] = args.ratio
     if args.duration is not None:
-        payload["duration"] = args.duration  # 仅 4/8/12
+        if args.duration not in (4, 8, 12):
+            return _ok(args.cmd, payload, error="RunningHub duration 仅支持 4/8/12，收到 %s" % args.duration)
+        payload["duration"] = args.duration
     if args.extra:
         # 允许 --extra '{"key":"val"}' 透传(供 asset_ids / real_person_mode 等)
         try:

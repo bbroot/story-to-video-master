@@ -52,10 +52,19 @@ def extract_characters(text):
         if 1 <= len(name) <= 4:
             chars.setdefault(name, {"mentions": 0, "first_scene": ""})
             chars[name]["mentions"] += 1
-    # 过滤：出现≥2次（避免短样本误提取单字/动作片段作为角色）
+    # 过滤：出现≥2次 + 虚词/方位词停用表（避免"他知/街道/味道"等被误当人名）
+    stop = {"他", "她", "它", "我", "你", "这", "那", "的", "了", "是", "在", "有",
+            "街道", "味道", "知道", "这件事", "之道", "一道", "知道", "报道",
+            "他知", "她知", "所有", "一切", "众人", "有人", "自己"}
     out = {}
     for n, d in chars.items():
+        if n in stop or any(w in n for w in ("街道", "味道", "知道")):
+            continue
         if d["mentions"] >= 2:
+            # 填充 first_scene：首次出现的上下文片段（供 Phase 3 特征卡参考）
+            idx = text.find(n)
+            if idx >= 0:
+                d["first_scene"] = text[max(0, idx - 20): idx + 40].replace("\n", " ")
             out[n] = d
     return out
 
@@ -101,6 +110,7 @@ def main():
         sys.exit(0)
 
     chars = extract_characters(text)
+    # 输出角色对象（含首次描写），供 Phase 3 锁卡使用；不再只输出名字
     scenes, props = extract_scenes_props(text)
     # 估算集数：按 ~3000 字/集
     ep_est = max(1, round(len(text) / 3000))
@@ -110,7 +120,7 @@ def main():
         "reason": "",
         "char_count": len(text),
         "episodes_est": ep_est,
-        "characters": list(chars.keys()),
+        "characters": [chars[k] for k in chars] if isinstance(chars, dict) else chars,
         "scenes": scenes,
         "props": props,
         "warnings": [warn] if warn else [],

@@ -34,11 +34,13 @@ def build_shots(episode, fps_plan=None):
     raw = episode.get("raw_len", 0)
     lo, hi = estimate_shots(raw)
     n = (lo + hi) // 2
+    ep_num = re.search(r"\d+", str(episode.get("episode", "")))
+    ep_tag_num = ep_num.group() if ep_num else "X"
     shots = []
     for i in range(1, n + 1):
         seg = "起因" if i <= n * 0.25 else ("经过" if i <= n * 0.75 else "结果")
         shots.append({
-            "shotId": f"{episode.get('episode','X')[:1]}.{i}",
+            "shotId": f"{ep_tag_num}.{i}",
             "durationSec": 2,
             "narrativeGoal": f"待填充（段落：{seg}）",
             "subjectAnchors": [],
@@ -49,6 +51,8 @@ def build_shots(episode, fps_plan=None):
             "dialogue": "",
             "emotion": "待定",
             "prompt": "待填充",
+            "rigAndPose": "待填充", "lighting": "待填充", "composition": "待填充",
+            "continuityLocks": [], "sound": "", "negativeConstraints": [],
         })
     return shots, lo, hi
 
@@ -89,8 +93,8 @@ def main():
     targets = [e for e in episodes if not args.episode or args.episode in e.get("episode", "")]
     if args.episode and not targets:
         # 尝试匹配 '第1集' 子串
-        targets = [e for e in episodes if args.episode in e.get("episode", "")
-                   or e.get("episode", "").replace(" ", "") == args.episode]
+        targets = [e for e in episodes
+                   if e.get("episode", "").replace(" ", "") == args.episode]
 
     count = 0
     for ep in targets:
@@ -101,7 +105,9 @@ def main():
             "chapter": ep.get("episode", ""),
             "sourceChapter": f"{ep.get('file','')} / {ep.get('episode','')}",
             "globalStyle": "电影写实",
-            "cast": [],
+            "cast": summary.get("cast", []) if isinstance(summary, dict) else [],
+            "relationshipGraph": [], "modelingSpec": "", "atmosphereSpec": "",
+            "referencedAssets": {"characterSheets": [], "videos": []},
             "shots": shots,
         }
         jpath = os.path.join(out_dir, f"storyboard-{ep_tag}.json")

@@ -5,15 +5,17 @@ lock_character.py —— 角色锁定闸门 + 生图提示词编排
 ================================================
 职责(对应 references/character-locking.md):
   ① write-prompt : 从角色卡 JSON 生成三视图/情绪变体 T2I 提示词并落盘到 角色/<name>*.prompt.txt
-  ② validate     : 冻结闸门——检查 registry 中每个角色三视图齐全+identity非空+约束存在 → locked
-  ③ rebind       : 扫描分镜 JSON,校验每个 @角色名/@角色名-状态 都能解析到锁定参考图
-  ④ list         : 列出当前锁定状态
+  ② fill         : 生图后回填 registry 的 three_view / expressions 路径（闸门数据来源）
+  ③ validate     : 冻结闸门——检查三视图文件真实存在 + identity 非空 + 约束存在 → locked
+  ④ rebind       : 扫描分镜 JSON,校验每个 @角色名 / @角色名@char_id / @角色名-状态 都能解析到锁定参考图
+  ⑤ list         : 列出当前锁定状态
 
 本脚本只管"锁定元数据 + 提示词 + 校验",不调用任何视频平台 API(生图由 Phase 6 脚本完成)。
 所有产物落在 output/<书籍名>/ 下,不污染源项目。
 
 用法:
   python3 lock_character.py write-prompt --book <书籍名> --card assets/char_lindu.json
+  python3 lock_character.py fill        --book <书籍名> --name <角色名> --front F.png --side S.png --back B.png [--exp angry=E.png]
   python3 lock_character.py validate    --book <书籍名>
   python3 lock_character.py rebind      --book <书籍名> --storyboard <分镜.json>
   python3 lock_character.py list        --book <书籍名>
@@ -26,6 +28,7 @@ import sys
 from pathlib import Path
 
 OUT_ROOT = Path("output")
+DEFAULT_NEGATIVE = ["禁止换脸", "禁止改变发型服饰", "禁止多人同框串脸", "禁止文字水印"]
 
 
 def _book_dir(book: str) -> Path:
@@ -78,6 +81,17 @@ EXP_TMPL = (
     "纯白或简洁背景,电影级光影,8K,禁止换脸/改变发型/改变服饰。"
 )
 
+# 中文状态 -> 英文变体键（分镜可用中文或英文状态名）
+STATE_ALIAS = {
+    "中性": "neutral", "平静": "neutral", "愤怒": "angry", "生气": "angry",
+    "悲伤": "sad", "难过": "sad", "紧张": "tense", "激动": "excited",
+    "犹豫": "hesitant", "恐惧": "fear", "惊讶": "surprise", "喜悦": "happy",
+}
+
+
+def _norm_state(st: str) -> str:
+    return STATE_ALIAS.get(st, st)
+
 
 def cmd_write_prompt(args) -> int:
     card_path = Path(args.card)
@@ -105,25 +119,62 @@ def cmd_write_prompt(args) -> int:
     found = next((c for c in chars if c.get("name") == name), None)
     if found is None:
         seed = card.get("seed", 12345)
+        # 修复①: negative_constraints 从角色卡回填（兼容多种字段名），缺省给默认值
+        neg = (card.get("negative_constraints")
+               or card.get("visual_stability_constraints")
+               or card.get("negativeConstraints")
+               or DEFAULT_NEGATIVE)
         found = {"char_id": card.get("character_id", "char_" + name),
                  "name": name, "canonical_identity": identity, "seed": seed,
                  "three_view": {"front": "", "side": "", "back": ""},
-                 "expressions": {}, "negative_constraints": [], "locked": False}
+                 "expressions": {}, "negative_constraints": neg, "locked": False}
         chars.append(found)
     else:
         if identity and not found.get("canonical_identity"):
             found["canonical_identity"] = identity
+        if not found.get("negative_constraints"):
+            found["negative_constraints"] = (
+                card.get("visual_stability_constraints") or DEFAULT_NEGATIVE)
     _save_registry(args.book, reg)
     return _ok("write-prompt", data={"name": name, "three_view_prompt": f"{name}.prompt.txt",
                                      "expressions": written, "registry": str(_registry_path(args.book))})
 
 
-def _validate_char(c: dict) -> list:
+def cmd_fill(args) -> int:
+    """修复⑧: 生图后回填 three_view / expressions 路径，打通闸门数据链。"""
+    reg = _load_registry(args.book)
+    chars = reg.get("characters", [])
+    c = next((x for x in chars if x.get("name") == args.name), None)
+    if c is None:
+        return _ok("fill", error="未注册角色: %s（请先 write-prompt）" % args.name)
+    tv = c.setdefault("three_view", {})
+    for k, v in (("front", args.front), ("side", args.side), ("back", args.back)):
+        if v:
+            tv[k] = v
+    # --exp name=path 可重复
+    exps = c.setdefault("expressions", {})
+    for item in (args.exp or []):
+        if "=" in item:
+            k, v = item.split("=", 1)
+            exps[_norm_state(k)] = v
+    _save_registry(args.book, reg)
+    return _ok("fill", data={"name": args.name, "three_view": tv, "expressions": exps})
+
+
+def _file_exists(book_dir: Path, p: str) -> bool:
+    if not p:
+        return False
+    fp = Path(p)
+    return (book_dir / fp).exists() if not fp.is_absolute() else fp.exists()
+
+
+def _validate_char(c: dict, book_dir: Path) -> list:
     msgs = []
     tv = c.get("three_view", {})
-    if not (tv.get("front") and tv.get("side") and tv.get("back")):
-        missing = [k for k in ("front", "side", "back") if not tv.get(k)]
-        msgs.append("三视图缺失: " + "/".join(missing))
+    # 修复⑨: 校验文件真实存在，杜绝"待生成"占位符骗过闸门
+    missing = [k for k in ("front", "side", "back") if not _file_exists(book_dir, tv.get(k, ""))]
+    if missing:
+        msgs.append("三视图文件不存在: " + "/".join(missing))
     if not c.get("canonical_identity"):
         msgs.append("canonical_identity 为空")
     if not c.get("negative_constraints"):
@@ -136,10 +187,11 @@ def cmd_validate(args) -> int:
     chars = reg.get("characters", [])
     if not chars:
         return _ok("validate", error="注册表为空,请先 write-prompt")
+    book_dir = _book_dir(args.book)
     results = []
     all_ok = True
     for c in chars:
-        issues = _validate_char(c)
+        issues = _validate_char(c, book_dir)
         ok = not issues
         c["locked"] = ok
         results.append({"name": c.get("name"), "locked": ok, "issues": issues})
@@ -149,13 +201,22 @@ def cmd_validate(args) -> int:
     return _ok("validate", data={"all_locked": all_ok, "characters": results})
 
 
-# ---- 解析 @角色名 / @角色名-状态 ----
-ATAG_RE = re.compile(r"@([A-Za-z0-9_一-龥]+)(?:-([A-Za-z0-9_一-龥]+))?")
+# ---- 解析 @角色名 / @角色名@char_id / @角色名-状态 ----
+# 修复②: 支持规范强制的双锚 @名@char_id，第二个 @ 处停止
+ATAG_RE = re.compile(r"@([^@\s\-]+)(?:-([^\s@]+))?(?:@([A-Za-z0-9_]+))?")
+
+
+def _find_char(chars_by_name, chars_by_id, nm, cid):
+    if cid and cid in chars_by_id:
+        return chars_by_id[cid]
+    return chars_by_name.get(nm)
 
 
 def cmd_rebind(args) -> int:
     reg = _load_registry(args.book)
-    chars = {c.get("name"): c for c in reg.get("characters", [])}
+    chars = reg.get("characters", [])
+    chars_by_name = {c.get("name"): c for c in chars}
+    chars_by_id = {c.get("char_id"): c for c in chars}
     sb_path = Path(args.storyboard)
     if not sb_path.exists():
         return _ok("rebind", error="分镜文件不存在: %s" % sb_path)
@@ -165,21 +226,30 @@ def cmd_rebind(args) -> int:
     used = []
     for sh in shots:
         text = json.dumps(sh, ensure_ascii=False)
-        for m in ATAG_RE.findall(text):
-            nm, st = m[0], m[1]
-            used.append((nm, st))
-            c = chars.get(nm)
+        for m in ATAG_RE.finditer(text):
+            nm, st, cid = m.group(1), m.group(2), m.group(3)
+            c = _find_char(chars_by_name, chars_by_id, nm, cid)
+            used.append((nm, cid or "", st or ""))
             if c is None:
-                problems.append("分镜 %s 引用未注册角色 @%s" % (sh.get("shotId"), nm))
+                problems.append("分镜 %s 引用未注册角色 @%s%s" %
+                                (sh.get("shotId"), nm, ("@" + cid) if cid else ""))
                 continue
+            real_name = c.get("name")
             if not c.get("locked"):
-                problems.append("角色 @%s 未锁定(front/side/back 未齐),禁止生图" % nm)
+                problems.append("角色 @%s 未锁定(三视图文件未齐),禁止生图" % real_name)
                 continue
             if st:
-                exp = c.get("expressions", {}).get(st)
+                key = _norm_state(st)
+                exp = c.get("expressions", {}).get(key)
+                # 修复③: 若注册表未回填，按文件命名约定探测 exp_<state>.png
                 if not exp:
-                    problems.append("角色 @%s 缺情绪变体 %s(需先生成)" % (nm, st))
-    # 去重统计
+                    guess = _book_dir(args.book) / "角色" / f"{real_name}_exp_{key}.png"
+                    if guess.exists():
+                        exp = str(guess)
+                        c.setdefault("expressions", {})[key] = exp
+                if not exp:
+                    problems.append("角色 @%s 缺情绪变体 %s(需先 fill 或生成)" % (real_name, key))
+    _save_registry(args.book, reg)
     uniq = sorted(set(used))
     return _ok("rebind", data={"referenced": uniq, "problems": problems, "passed": not problems})
 
@@ -199,6 +269,10 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     p_w = sub.add_parser("write-prompt"); p_w.add_argument("--book", required=True); p_w.add_argument("--card", required=True)
     p_w.set_defaults(func=cmd_write_prompt)
+    p_f = sub.add_parser("fill"); p_f.add_argument("--book", required=True); p_f.add_argument("--name", required=True)
+    p_f.add_argument("--front"); p_f.add_argument("--side"); p_f.add_argument("--back")
+    p_f.add_argument("--exp", action="append", help="状态=路径，可重复，如 --exp angry=角色/林渡_exp_angry.png")
+    p_f.set_defaults(func=cmd_fill)
     p_v = sub.add_parser("validate"); p_v.add_argument("--book", required=True); p_v.set_defaults(func=cmd_validate)
     p_r = sub.add_parser("rebind"); p_r.add_argument("--book", required=True); p_r.add_argument("--storyboard", required=True)
     p_r.set_defaults(func=cmd_rebind)

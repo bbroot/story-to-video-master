@@ -66,6 +66,8 @@ def _build(sub: str, args: argparse.Namespace, dry_run: bool) -> int:
         cli_args += ["--duration", str(args.duration)]
     if getattr(args, "video_resolution", None):
         cli_args += ["--video-resolution", args.video_resolution]
+    if getattr(args, "seed", None) is not None:
+        cli_args += ["--seed", str(args.seed)]
     # 参考图
     for img in getattr(args, "image", []) or []:
         p = Path(img)
@@ -105,6 +107,7 @@ def main():
         p.add_argument("--ratio", default="16:9", help="比例 16:9/9:16/1:1")
         p.add_argument("--model-version", help="模型版本")
         p.add_argument("--duration", type=int, help="视频时长(秒)")
+        p.add_argument("--seed", type=int, help="固定随机种子(确保跨镜头角色一致性)")
         p.add_argument("--video-resolution", help="视频分辨率 720p/1080p")
         p.add_argument("--dry-run", action="store_true")
         if with_images:
@@ -132,7 +135,10 @@ def main():
             return _ok("user_credit", [], error="未检测到 dreamina CLI")
         if args.dry_run:
             return _ok("user_credit", [cli, "user_credit"], data={"dry_run": True})
-        r = subprocess.run([cli, "user_credit"], capture_output=True, text=True)
+        try:
+            r = subprocess.run([cli, "user_credit"], capture_output=True, text=True, timeout=600)
+        except subprocess.TimeoutExpired:
+            return _ok("user_credit", [cli, "user_credit"], error="查询额度超时(600s)")
         return _ok("user_credit", [cli, "user_credit"], data={"stdout": r.stdout, "stderr": r.stderr})
     # generation subcommands
     return _build(args.cmd, args, args.dry_run)

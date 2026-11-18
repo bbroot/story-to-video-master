@@ -132,8 +132,8 @@ def load_tracker(tracker_dir):
         "conflicts_count": len(cf_list) if isinstance(cf_list, list) else 0,
         "conflicts_sample": (cf_list[:5] if isinstance(cf_list, list) else []),
         "plot_bus_chapters": len(plot_bus) if isinstance(plot_bus, list) else 0,
-        "ncg_nodes": len(ncg.get("nodes", [])) if isinstance(ncg, dict) else 0,
-        "ncg_super_nodes": len(ncg.get("super_nodes", [])) if isinstance(ncg, dict) else 0,
+        "ncg_nodes": len(ncg.get("nodes") or []) if isinstance(ncg, dict) else 0,
+        "ncg_super_nodes": len(ncg.get("super_nodes") or []) if isinstance(ncg, dict) else 0,
         "style_anime_enhanced": has_style_anime,
     }
 
