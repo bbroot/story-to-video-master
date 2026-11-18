@@ -2,7 +2,7 @@
 name: story-to-video-master
 slug: story-to-video-master
 displayName: story-to-video-master 小说→分镜/短剧改编
-version: 2.5.0
+version: 2.6.0
 description: >
   端到端将小说/书籍转化为可执行的分镜 JSON、视频组提示词、完整视频作品的超级 SKILL。
   ★ 通用书籍文件夹理解器:能读取任意用户的书籍文件夹,自动理解所有文件的关系
@@ -78,7 +78,7 @@ related_skills: [novel-master, storyboard-sketch-narrative, novel-to-storyboard,
 本 SKILL 适配的是你**实际使用的 v2 分目录项目**(以《觉醒》为基准样本):
 
 ```
-~/.qclaw/workspace/novels/<书名>/
+novels/<书名>/（由 NOVELS_ROOT 指定，默认当前工作目录）
 ├── settings/
 │   ├── world.md            # 世界观总览 → 用于场景氛围 / 设定合规
 │   ├── geography.md         # 地理与势力 → 场景参考
@@ -846,16 +846,16 @@ ffmpeg -f concat -safe 0 -i clips.txt -c copy output.mp4   # 合并各 Clip
 
 **安装**(推荐软链到 skills 目录,与 novel-master 并列):
 ```bash
-ln -s ~/Documents/龙虾/story-to-video-master ~/.qclaw/skills/story-to-video-master
+cp -R . <agent-skills-dir>/story-to-video-master   # 见 INSTALL.md
 # 前置:novel-master 已安装
-ls -la ~/.qclaw/skills/novel-master/
+ls -la <agent-skills-dir>/novel-master/
 ```
 
 **使用方式**:
 ```text
 # 方式1:适配模式(推荐)- 自动读取 novel-master 项目
 用 $story-to-video-master,把我的小说《觉醒》改编为 3 集短剧。
-项目在 ~/.qclaw/workspace/novels/觉醒/
+项目在 novels/觉醒/（由 NOVELS_ROOT 指定）
 
 # 方式1b:通用书籍文件夹理解模式(新增)- 任意书籍文件夹,无需固定结构
 用 $story-to-video-master,改编 ~/Documents/我的书稿/ 这个文件夹里的所有内容。

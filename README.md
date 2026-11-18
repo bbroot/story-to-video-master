@@ -6,7 +6,7 @@
 > **深度适配 `novel-master` v2 分布式创作架构**，同时支持普通小说与任意书籍文件夹。
 > 内置**角色锁定冻结闸门**——用三视图链式生成 + 情绪变体 + 唯一真相源注册表，从根上消灭跨镜头脸/身材漂移。
 >
-> 📦 **v2.5.0 完整源码（含 8 个脚本与 9 份参考文档）已发布在 GitHub：**[`bbroot/story-to-video-master`](https://github.com/bbroot/story-to-video-master)。
+> 📦 **v2.6.0 完整源码（含 8 个脚本与 9 份参考文档）已发布在 GitHub：**[`bbroot/story-to-video-master`](https://github.com/bbroot/story-to-video-master)。
 
 <p align="center">
   <picture>
@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/bbroot/story-to-video-master"><img src="https://img.shields.io/badge/GitHub-v2.5.0-2ea44f?style=flat-square" alt="GitHub"></a>
+  <a href="https://github.com/bbroot/story-to-video-master"><img src="https://img.shields.io/badge/GitHub-v2.6.0-2ea44f?style=flat-square" alt="GitHub"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT"></a>
   <a href="#-角色锁定冻结闸门"><img src="https://img.shields.io/badge/核心-角色锁定闸门-Purple?style=flat-square" alt="locking"></a>
   <a href="#-三模式适配"><img src="https://img.shields.io/badge/模式-双模式+文件夹-7b2ff7?style=flat-square" alt="modes"></a>
@@ -31,7 +31,7 @@
 
 <h2 id="中文">🌟 为什么需要 story-to-video-master？</h2>
 
-| 维度 | 手动改分镜 / 套壳提示词 | **story-to-video-master v2.5** |
+| 维度 | 手动改分镜 / 套壳提示词 | **story-to-video-master v2.6** |
 |------|----------------------|-------------------------------|
 | 🎯 输入来源 | 只能粘贴正文 | **三模式**：novel-master v2 项目 / 普通小说粘贴 / 任意书籍文件夹自动理解 |
 | 🧩 角色一致性 | 每镜重描，跨集脸崩 | **冻结闸门**：三视图链式同人 + 情绪变体 + 注册表唯一真相源 |
@@ -97,10 +97,11 @@ Phase 6  视频生成（三自动 + 三手动）   → Phase 7 校验 + 回写�
 
 ```bash
 # 1. 安装（软链到 OpenClaw skills）
-ln -s ~/Documents/龙虾/story-to-video-master ~/.qclaw/skills/story-to-video-master
+# 把本目录放进所用 Agent 的 skills 目录（见 INSTALL.md）
+cp -R . <agent-skills-dir>/story-to-video-master
 
 # 2. 在对话中触发（三模式之一）
-"把 ~/Documents/龙虾/觉醒 改编成 12 集短剧分镜"   # novel-master 适配模式
+"把 /path/to/your/novels/觉醒 改编成 12 集短剧分镜"   # novel-master 适配模式
 "把这段小说改成短视频分镜"                          # 普通小说模式
 "理解这个书籍文件夹并做改编规划"                    # 文件夹理解模式
 
@@ -117,7 +118,7 @@ python3 scripts/lock_character.py validate --book <书名>   # 全绿才允许�
 
 ```
 story-to-video-master/
-├── SKILL.md                       # 主技能定义（v2.5.0，八阶段工作流）
+├── SKILL.md                       # 主技能定义（v2.6.0，八阶段工作流）
 ├── references/                    # 9 份方法论参考
 │   ├── character-locking.md       # ★ 角色锁定冻结闸门规范
 │   ├── character-bible.md         # 角色圣经（@标签注册）

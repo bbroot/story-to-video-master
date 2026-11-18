@@ -189,7 +189,10 @@ def scan(folder: str) -> dict:
     for p in sorted(root.rglob("*")):
         if p.is_file():
             # 跳过明显的非书籍文件
-            if any(skip in p.parts for skip in (".git", "node_modules", "__pycache__", "output", ".qclaw")):
+            default_skips = (".git", "node_modules", "__pycache__", "output")
+            extra = os.environ.get("BOOK_SCAN_SKIP_DIRS", "")
+            skips = default_skips + tuple(x for x in extra.split(",") if x)
+            if any(skip in p.parts for skip in skips):
                 continue
             info = classify_file(p)
             if info.get("category") == "skip":
